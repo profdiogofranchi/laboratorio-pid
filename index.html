@@ -298,6 +298,8 @@ function draw(){
 // Leitura interativa do ponto mais próximo da curva principal (desktop e toque).
 function updatePlotHover(clientX,clientY){
  if(!sim||!sim.arr||!sim.arr.length)return;
+ const source=sim.arr.slice(0,visible);
+ if(!source.length)return;
  const rect=cv.getBoundingClientRect(),sx=cv.width/rect.width,sy=cv.height/rect.height;
  const x=(clientX-rect.left)*sx,y=(clientY-rect.top)*sy;
  const w=cv.width,h=cv.height,L=62,R=18,T=16,B=40,p=sim.p;
@@ -305,10 +307,10 @@ function updatePlotHover(clientX,clientY){
  const X=t=>L+t/p.T*(w-L-R),Y=v=>h-B-(v-ymin)/Math.max(.1,ymax-ymin)*(h-T-B);
  if(x<L||x>w-R||y<T||y>h-B){plotHover=null;draw();return}
  // Seleciona a amostra horizontalmente mais próxima do cursor.
- const t=(x-L)/(w-L-R)*p.T;let lo=0,hi=sim.arr.length-1;
- while(lo<hi){const mid=(lo+hi)>>1;if(sim.arr[mid].t<t)lo=mid+1;else hi=mid;}
- let idx=lo;if(idx>0&&Math.abs(sim.arr[idx-1].t-t)<Math.abs(sim.arr[idx].t-t))idx--;
- const a=sim.arr[idx],distance=Math.hypot(X(a.t)-x,Y(a.y)-y);
+ const t=(x-L)/(w-L-R)*p.T;let lo=0,hi=source.length-1;
+ while(lo<hi){const mid=(lo+hi)>>1;if(source[mid].t<t)lo=mid+1;else hi=mid;}
+ let idx=lo;if(idx>0&&Math.abs(source[idx-1].t-t)<Math.abs(source[idx].t-t))idx--;
+ const a=source[idx],distance=Math.hypot(X(a.t)-x,Y(a.y)-y);
  // Não mostrar leitura quando o cursor estiver muito distante da curva; tolerância escala com o gráfico.
  plotHover=distance<Math.max(18,rect.width*.025)?{index:idx}:null;
  draw();
