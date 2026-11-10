@@ -13,7 +13,7 @@ h2{font-size:17px;margin:0 0 12px}.group{margin:12px 0}.group label{display:flex
 input[type=range]{width:100%;accent-color:var(--blue)}input[type=number],select{padding:8px;border:1px solid var(--line);border-radius:8px;background:white;font:inherit;color:var(--ink)}input[type=number]{width:105px}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}.hint{font-size:12px;color:var(--muted)}
 .actions,.presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:white;color:var(--ink);font:inherit;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:white}button:disabled{opacity:.45;cursor:not-allowed}
-.right{display:grid;gap:16px}.chart{width:100%;height:320px;display:block}.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.right{display:grid;gap:16px}.plotWrap{position:relative;width:100%}.chart{width:100%;height:320px;display:block;cursor:crosshair;touch-action:pan-y}.plotTooltip{position:absolute;right:12px;top:10px;z-index:2;padding:7px 10px;border:1px solid #cbd5e1;border-radius:8px;background:rgba(255,255,255,.96);box-shadow:0 3px 12px #17203318;color:#172033;font:12px/1.45 ui-monospace,Consolas,monospace;pointer-events:none;font-variant-numeric:tabular-nums}.plotTooltip strong{color:#047857}.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
 .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.metric{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px}.metric small{display:block;color:var(--muted);font-size:12px}.metric strong{font-size:18px;font-variant-numeric:tabular-nums}.metric em{display:block;color:var(--muted);font-size:10px;font-style:normal}
 .formula{background:#f8fafc;border:1px solid #edf1f6;border-radius:8px;padding:9px;font-family:ui-monospace,monospace;overflow-wrap:anywhere;margin:7px 0}
 .status{font-size:13px;color:var(--muted);margin-top:9px}.progress{height:6px;background:#e8edf5;border-radius:8px;overflow:hidden;margin-top:10px}.progress span{height:100%;width:0;display:block;background:var(--blue)}
@@ -54,7 +54,7 @@ input[type=range]{width:100%;accent-color:var(--blue)}input[type=number],select{
 </section>
 <div class="right">
 <section class="panel"><div class="row"><h2 id="chartTitle">Resposta ao degrau em malha fechada</h2><span class="hint" id="clock">t = 0,00 s</span></div>
-<canvas id="plot" class="chart" width="1000" height="350"></canvas>
+<div class="plotWrap"><canvas id="plot" class="chart" width="1000" height="350" aria-label="Gráfico interativo da resposta do processo"></canvas><div id="plotTooltip" class="plotTooltip" role="status" aria-live="polite">Passe o mouse sobre a curva para ler tempo e PV.</div></div>
 <div class="legend" id="chartLegend"><span><i class="dot" style="background:#2563eb"></i>Referência</span><span><i class="dot" style="background:#059669"></i>Saída y(t)</span><span class="hint">Tracejados: Tr, Td, Tp, Mp, Ts e Ess; faixa cinza: ±2%.</span></div></section>
 
 <p class="hint">Os controles de ganhos, referência e simulação à esquerda, assim como o gráfico acima, permanecem disponíveis em todas as abas.</p><div class="mainTabs">
@@ -181,7 +181,7 @@ p3:{desc:'Processo de maior ganho: a mesma ação de controle produz uma variaç
 p4:{desc:'Processo de menor ganho: a saída reage menos à mesma ação de controle. Observe como isso afeta a velocidade e o erro durante a sintonia.',eq:'G(s) = [0,5/(2,8s + 1)] · [(2 − 1,2s)/(2 + 1,2s)]',kind:'pade',K:0.5,tau:2.8,td:1.2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=0,5; τ=2,8 s; τd=1,2 s.'},
 p5:{desc:'Processo com maior atraso: a saída demora mais para refletir as alterações na entrada. Faça ajustes mais conservadores e observe a tendência à oscilação.',eq:'G(s) = [1/(2,8s + 1)] · [(2 − 2s)/(2 + 2s)]',kind:'pade',K:1,tau:2.8,td:2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=1; τ=2,8 s; τd=2 s.'}
 };
-let sim=null,visible=0,raf=0,playing=false,lastStamp=0,dt=.002,znPID=null,znPI=null,znReaction=null,openLoop=false;
+let sim=null,visible=0,raf=0,playing=false,lastStamp=0,dt=.002,znPID=null,znPI=null,znReaction=null,openLoop=false,plotHover=null;
 function pnow(){return Object.assign({kp:+$('kp').value,ki:+$('ki').value,kd:+$('kd').value,ref:Math.max(.01,+$('ref').value),T:Math.max(2,+$('duration').value),disturbance:$('disturbance').value,disturbanceTime:+$('disturbanceTime').value,disturbanceAmp:+$('disturbanceAmp').value,useSaturation:$('useSaturation').checked,useAntiWindup:$('useAntiWindup').checked,useNoise:$('useNoise').checked,noiseAmp:+$('noiseAmp').value,useRateLimit:$('useRateLimit').checked,rateLimit:Math.max(.01,+$('rateLimit').value),useDelay:$('useDelay').checked,transportDelay:Math.max(0,+$('transportDelay').value)},plants[$('plant').value])}
 function labels(){['kp','ki','kd'].forEach(k=>$(k+'v').textContent=(+$(k).value).toFixed(2))}
 function plantOutput(st,p){if(p.kind==='pade'){return 2*p.K*st[0]-p.td*p.K*st[1]}return st[0]}
@@ -283,8 +283,43 @@ function draw(){
  }
  if(a.length){ctx.strokeStyle='#059669';ctx.lineWidth=2.4;ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(X(v.t),Y(v.y)):ctx.moveTo(X(v.t),Y(v.y)));ctx.stroke()}
  if(sim.comparisons){const colors=['#d97706','#7c3aed','#0891b2'];sim.comparisons.forEach((c,j)=>{ctx.strokeStyle=colors[j];ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();c.arr.slice(0,visible).forEach((v,i)=>i?ctx.lineTo(X(v.t),Y(v.y)):ctx.moveTo(X(v.t),Y(v.y)));ctx.stroke();ctx.setLineDash([])})}
+ // Marcador interativo e leitura do ponto da curva principal.
+ if(plotHover&&a.length){
+  const idx=Math.max(0,Math.min(a.length-1,plotHover.index)),v=a[idx],px=X(v.t),py=Y(v.y);
+  ctx.save();ctx.strokeStyle='rgba(5,150,105,.7)';ctx.lineWidth=1.2;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(px,T);ctx.lineTo(px,h-B);ctx.moveTo(L,py);ctx.lineTo(w-R,py);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#fff';ctx.strokeStyle='#047857';ctx.lineWidth=3;ctx.beginPath();ctx.arc(px,py,5.5,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.restore();
+  $('plotTooltip').innerHTML='<strong>Leitura da curva</strong><br>Tempo: '+v.t.toFixed(3).replace('.',',')+' s<br>PV: '+v.y.toFixed(4).replace('.',',');
+  $('plotTooltip').style.display='block';
+ }else if(!plotHover){
+  $('plotTooltip').innerHTML=openLoop?'Passe o mouse sobre a curva verde para ler tempo e PV.':'Passe o mouse sobre a curva para ler tempo e PV.';
+ }
  ctx.textAlign='left';ctx.fillStyle='#334155';ctx.fillText('Tempo (s)',w/2-25,h-2);
 }
+// Leitura interativa do ponto mais próximo da curva principal (desktop e toque).
+let plotHover=null,plotScale=null;
+function updatePlotHover(clientX,clientY){
+ if(!sim||!sim.arr||!sim.arr.length)return;
+ const rect=cv.getBoundingClientRect(),sx=cv.width/rect.width,sy=cv.height/rect.height;
+ const x=(clientX-rect.left)*sx,y=(clientY-rect.top)*sy;
+ const w=cv.width,h=cv.height,L=62,R=18,T=16,B=40,p=sim.p;
+ const ymin=Math.min(0,...sim.arr.map(v=>v.y)),ymax=Math.max(p.ref*1.15,...sim.arr.map(v=>v.y));
+ const X=t=>L+t/p.T*(w-L-R),Y=v=>h-B-(v-ymin)/Math.max(.1,ymax-ymin)*(h-T-B);
+ if(x<L||x>w-R||y<T||y>h-B){plotHover=null;draw();return}
+ // Seleciona a amostra horizontalmente mais próxima do cursor.
+ const t=(x-L)/(w-L-R)*p.T;let lo=0,hi=sim.arr.length-1;
+ while(lo<hi){const mid=(lo+hi)>>1;if(sim.arr[mid].t<t)lo=mid+1;else hi=mid;}
+ let idx=lo;if(idx>0&&Math.abs(sim.arr[idx-1].t-t)<Math.abs(sim.arr[idx].t-t))idx--;
+ const a=sim.arr[idx],distance=Math.hypot(X(a.t)-x,Y(a.y)-y);
+ // Não mostrar leitura quando o cursor estiver muito distante da curva; tolerância escala com o gráfico.
+ plotHover=distance<Math.max(18,rect.width*.025)?{index:idx}:null;
+ draw();
+}
+cv.addEventListener('mousemove',e=>updatePlotHover(e.clientX,e.clientY));
+cv.addEventListener('mouseleave',()=>{plotHover=null;draw();});
+cv.addEventListener('touchstart',e=>{const t=e.touches[0];if(t)updatePlotHover(t.clientX,t.clientY);},{passive:true});
+cv.addEventListener('touchmove',e=>{const t=e.touches[0];if(t)updatePlotHover(t.clientX,t.clientY);},{passive:true});
+cv.addEventListener('touchend',()=>{plotHover=null;draw();},{passive:true});
+window.addEventListener('resize',()=>{plotHover=null;draw();});
 function animate(ts){if(!playing)return;if(!lastStamp)lastStamp=ts;let elapsed=(ts-lastStamp)/1000;lastStamp=ts;visible=Math.min(sim.arr.length,visible+Math.max(1,Math.floor(elapsed*3/dt)));draw();updateMetrics();if(visible<sim.arr.length)raf=requestAnimationFrame(animate);else{playing=false;$('status').textContent='Ensaio concluído. Indicadores finais disponíveis.'}}
 function stop(){playing=false;cancelAnimationFrame(raf);lastStamp=0}
 function updateModeUI(){
