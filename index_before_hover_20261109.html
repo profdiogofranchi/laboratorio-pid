@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laboratório PID — Sintonia e desafios</title>
+<style>
+:root{--bg:#f3f6fb;--panel:#fff;--ink:#172033;--muted:#64748b;--line:#dce4ef;--blue:#2563eb;--green:#059669;--orange:#d97706;--red:#dc2626}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,Segoe UI,Arial}
+header{background:#10213d;color:white;padding:21px max(18px,calc((100% - 1240px)/2))}header h1{margin:0;font-size:27px}header p{margin:5px 0 0;color:#cbd5e1}
+main{max-width:1240px;margin:20px auto;padding:0 16px 36px;display:grid;grid-template-columns:330px 1fr;gap:17px}
+.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 3px 12px #1720330a}
+h2{font-size:17px;margin:0 0 12px}.group{margin:12px 0}.group label{display:flex;justify-content:space-between;gap:8px;font-weight:650}.group output{font-variant-numeric:tabular-nums;color:var(--blue)}
+input[type=range]{width:100%;accent-color:var(--blue)}input[type=number],select{padding:8px;border:1px solid var(--line);border-radius:8px;background:white;font:inherit;color:var(--ink)}input[type=number]{width:105px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}.hint{font-size:12px;color:var(--muted)}
+.actions,.presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:white;color:var(--ink);font:inherit;cursor:pointer}button.primary{background:var(--blue);border-color:var(--blue);color:white}button:disabled{opacity:.45;cursor:not-allowed}
+.right{display:grid;gap:16px}.chart{width:100%;height:320px;display:block}.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--muted);font-size:13px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.metric{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px}.metric small{display:block;color:var(--muted);font-size:12px}.metric strong{font-size:18px;font-variant-numeric:tabular-nums}.metric em{display:block;color:var(--muted);font-size:10px;font-style:normal}
+.formula{background:#f8fafc;border:1px solid #edf1f6;border-radius:8px;padding:9px;font-family:ui-monospace,monospace;overflow-wrap:anywhere;margin:7px 0}
+.status{font-size:13px;color:var(--muted);margin-top:9px}.progress{height:6px;background:#e8edf5;border-radius:8px;overflow:hidden;margin-top:10px}.progress span{height:100%;width:0;display:block;background:var(--blue)}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}.tabs button.active{background:#eaf1ff;border-color:#9bb8ff;color:#1746a2}.mainTabs{display:grid;gap:14px}.tabContent{display:none;gap:16px}.tabContent.active{display:grid}.mainTabButtons{background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px;margin:0}.mainTabButtons button{flex:1}
+.result{padding:10px;border-radius:9px;background:#f8fafc;border:1px solid var(--line);margin-top:10px}.good{color:#047857}.warn{color:#b45309}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.mini{border:1px solid var(--line);border-radius:10px;padding:11px;background:#fbfdff}.mini h3{font-size:14px;margin:0 0 5px}.mini p{margin:4px 0}.controlrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.controlrow label{font-weight:600}.controlrow input,.controlrow select{max-width:140px}.pill{display:inline-block;background:#eaf1ff;color:#1746a2;border-radius:20px;padding:2px 8px;font-size:11px;font-weight:700}.tableWrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px;min-width:850px}th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}thead{background:#f8fafc}td{font-variant-numeric:tabular-nums}.emptyRow{text-align:center!important;color:var(--muted);padding:18px}
+@media(max-width:600px){.two,.three{grid-template-columns:1fr}.chart{height:270px}.mainTabButtons{display:grid;grid-template-columns:1fr}.mainTabButtons button{width:100%}}
+@media(max-width:850px){main{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style></head>
+<body>
+<header><h1>Laboratório de Controle PID</h1><p>Laboratório didático: fundamentos, sintonia manual, Ziegler–Nichols, perturbações e desafios de projeto.</p></header>
+<main>
+<section class="panel">
+<h2>Planta em estudo</h2><p class="hint">Selecione uma das seis variações. Os parâmetros internos não são apresentados numericamente nesta área; caracterize o processo pelo ensaio em malha aberta.</p>
+<div class="group"><select id="plant" style="width:100%">
+<option value="p0">Planta 1 — Referência: RC com atraso</option>
+<option value="p1">Planta 2 — Sistema mais rápido</option>
+<option value="p2">Planta 3 — Sistema mais lento</option>
+<option value="p3">Planta 4 — Maior ganho</option>
+<option value="p4">Planta 5 — Menor ganho</option>
+<option value="p5">Planta 6 — Maior atraso</option>
+</select></div>
+<div id="plantDescription" class="hint"></div><div id="plantEquation" class="formula"></div>
+<hr style="border:0;border-top:1px solid var(--line);margin:15px 0">
+<h2>Ajuste manual dos ganhos</h2>
+<div class="group"><label>Kp — proporcional <output id="kpv">2.00</output></label><input id="kp" type="range" min="0" max="30" step=".05" value="2"></div>
+<div class="group"><label>Ki — integral <output id="kiv">1.00</output></label><input id="ki" type="range" min="0" max="10" step=".01" value="1"></div>
+<div class="group"><label>Kd — derivativo <output id="kdv">0.50</output></label><input id="kd" type="range" min="0" max="10" step=".01" value=".5"></div>
+<div class="hint">Altere os ganhos e clique em Simular para comparar as respostas.</div>
+<hr style="border:0;border-top:1px solid var(--line);margin:15px 0">
+<h2>Referência e simulação</h2>
+<div class="group row"><label>Referência (degrau)</label><input id="ref" type="number" value="1" min=".1" max="20" step=".1"></div>
+<div class="group row"><label>Tempo de simulação (s)</label><input id="duration" type="number" value="16" min="2" max="60" step="1"></div><p class="hint">A referência é o valor desejado na saída. Com controle somente P, pode restar erro permanente; a ação I é que tende a eliminá-lo. Plantas lentas podem precisar de maior tempo de simulação. A saturação do atuador está desativada inicialmente.</p>
+<div class="presets"><button data-preset="p">P</button><button data-preset="i">I</button><button data-preset="d">D</button><button data-preset="pi">PI</button><button data-preset="pd">PD</button><button data-preset="pid">PID</button></div>
+<div class="actions"><button class="primary" id="run">▶ Simular</button><button id="openLoopToggle">▶ Ensaio em malha aberta</button><button id="pause">Ⅱ Pausar</button><button id="reset">↺ Reiniciar</button></div>
+<div class="hint" id="modeHint">Modo atual: malha fechada — o PID atua sobre o erro.</div>
+<div class="progress"><span id="bar"></span></div><div class="status" id="status">Preparando simulação…</div>
+</section>
+<div class="right">
+<section class="panel"><div class="row"><h2 id="chartTitle">Resposta ao degrau em malha fechada</h2><span class="hint" id="clock">t = 0,00 s</span></div>
+<canvas id="plot" class="chart" width="1000" height="350"></canvas>
+<div class="legend" id="chartLegend"><span><i class="dot" style="background:#2563eb"></i>Referência</span><span><i class="dot" style="background:#059669"></i>Saída y(t)</span><span class="hint">Tracejados: Tr, Td, Tp, Mp, Ts e Ess; faixa cinza: ±2%.</span></div></section>
+
+<p class="hint">Os controles de ganhos, referência e simulação à esquerda, assim como o gráfico acima, permanecem disponíveis em todas as abas.</p><div class="mainTabs">
+  <div class="tabs mainTabButtons" role="tablist" aria-label="Módulos do laboratório">
+    <button class="active" id="mainTabManual" role="tab" aria-selected="true" aria-controls="tabManual">1. Sintonia manual</button>
+    <button id="mainTabZN" role="tab" aria-selected="false" aria-controls="tabZN">2. Ziegler–Nichols</button>
+    <button id="mainTabChallenges" role="tab" aria-selected="false" aria-controls="tabChallenges">3. Desafios</button>
+  </div>
+  <div id="tabManual" class="tabContent active" role="tabpanel" aria-labelledby="mainTabManual">
+    <section class="panel" id="metricsPanel"><h2>Indicadores da sintonia manual</h2>
+      <p class="hint">Ajuste Kp, Ki e Kd no painel à esquerda, execute a simulação e acompanhe os indicadores no gráfico e nesta área.</p>
+      <div class="metrics">
+<div class="metric"><small>Tempo de subida (Tr)</small><strong id="tr">—</strong><em>10% a 90% da referência</em></div>
+<div class="metric"><small>Tempo de atraso (Td)</small><strong id="tdelay">—</strong><em>Primeira chegada a 50%</em></div>
+<div class="metric"><small>Tempo de pico (Tp)</small><strong id="tp">—</strong><em>Instante do maior pico</em></div>
+<div class="metric"><small>Sobressinal (Mp)</small><strong id="mp">—</strong><em>Percentual acima da referência</em></div>
+<div class="metric"><small>Tempo de acomodação (Ts)</small><strong id="ts">—</strong><em>Banda de ±2%</em></div>
+<div class="metric"><small>Erro final (Ess)</small><strong id="ess">—</strong><em>Erro no fim da janela</em></div>
+</div><p class="hint" id="metricNote">Indicadores provisórios até a conclusão da simulação.</p>
+    </section>
+    <section class="panel"><h2>5. Preveja, simule e explique</h2>
+<p>Antes de executar, faça uma previsão. Depois compare sua hipótese com o comportamento observado.</p>
+<div class="result"><b>Pergunta conceitual</b><p id="predictionQuestion">Mantendo Kp constante, o que tende a acontecer quando aumentamos Ki?</p>
+<div class="group"><select id="predictionAnswer" style="width:100%"><option value="">Escolha sua previsão…</option><option value="a">O erro permanente tende a diminuir, mas pode aumentar o sobressinal e as oscilações.</option><option value="b">O erro permanente sempre aumenta e a resposta fica mais lenta.</option><option value="c">Ki não altera a resposta do sistema.</option></select></div>
+<button id="checkPrediction">Conferir previsão</button><div id="predictionFeedback" class="hint" style="margin-top:8px">Registre sua hipótese antes de simular.</div></div>
+<div class="actions"><button class="primary" id="compareControllers">Comparar P × PI × PID</button><button id="clearComparison">Limpar comparação</button></div>
+<p class="hint">A comparação utiliza a mesma planta, referência e condições para os três controladores. As curvas aparecem sobrepostas no gráfico.</p>
+</section>
+  </div>
+  <div id="tabZN" class="tabContent" role="tabpanel" aria-labelledby="mainTabZN">
+    <section class="panel" id="openLoopPanel" style="display:none"><h2>Ensaio em malha aberta</h2><p class="hint">O controlador foi desconectado. A planta recebe diretamente um degrau unitário: u(t) = 1. A curva verde representa a saída da planta. A linha laranja é a tangente estimada no trecho de maior inclinação; suas interseções ajudam a identificar L e T.</p><p class="hint" id="openLoopReadout">Observe a curva e estime os parâmetros da resposta.</p></section>
+    <section class="panel"><h2>8. Atividade prática — Sintonia Ziegler–Nichols</h2>
+<p><b>Objetivo:</b> obter os parâmetros de sintonia a partir da resposta da planta, calcular os ganhos e comparar o resultado com a sintonia manual.</p>
+<div class="result">
+<b>Roteiro de trabalho do aluno</b>
+<ol style="margin:6px 0 4px;padding-left:20px">
+<li>Escolha uma planta e execute o ensaio correspondente ao método escolhido.</li>
+<li>Observe o gráfico e estime os parâmetros necessários (L e T, ou Ku e Pu).</li>
+<li>Faça os cálculos manualmente, registrando as equações e os resultados.</li>
+<li>Use o botão de cálculo para conferir seus valores.</li>
+<li>Aplique os ganhos calculados ao controlador e execute a simulação em malha fechada.</li>
+<li>Compare a resposta obtida com a sintonia manual e explique qual solução atende melhor aos requisitos.</li>
+</ol>
+</div>
+<div class="tabs"><button class="active" id="znUltimateTab">Sensibilidade limite (malha fechada)</button><button id="znReactionTab">Curva de reação (malha aberta)</button></div>
+<div id="znUltimate">
+<p><b>Procedimento experimental clássico:</b> utilize somente o controlador proporcional (Ki = 0 e Kd = 0). Aumente Kp gradualmente até obter oscilações sustentadas. O ganho nesse limite é Ku e o período de um ciclo é Pu.</p>
+<p class="hint">No emulador, ajuste o preset P e experimente aumentar Kp para observar a resposta. O botão abaixo fornece uma estimativa matemática de Ku e Pu pela resposta em frequência da planta, para conferência. Nem todas as plantas possuem Ku e Pu finitos.</p>
+<button class="primary" id="calcUltimate">Calcular Ku e Pu para conferência</button>
+<div id="ultimateResult" class="result hint">Selecione uma planta e calcule os parâmetros críticos.</div>
+<div class="actions"><button id="applyZN" disabled>Aplicar ganhos PID de Z-N</button><button id="applyZNPI" disabled>Aplicar ganhos PI de Z-N</button></div>
+</div>
+<div id="znReaction" style="display:none">
+<p><b>Procedimento experimental:</b> abra a malha de controle e aplique um degrau unitário diretamente à planta. Observe a curva de reação e determine o ganho estático K, o atraso aparente L e a constante de tempo T.</p>
+<p class="hint">Clique em “Ensaio em malha aberta” na área de ensaio. O PID será desconectado e a planta receberá u(t) = 1. Estime L e T no gráfico antes de usar o cálculo de conferência.</p>
+<div class="result"><b>Como estimar os parâmetros</b><ol style="margin:6px 0 4px;padding-left:20px"><li>Trace uma tangente no trecho de maior inclinação da curva.</li><li>A interseção da tangente com o eixo do tempo estima L.</li><li>O intervalo entre essa interseção e o ponto em que a tangente alcança o valor final estima T.</li><li>Calcule K pela variação da saída em regime permanente dividida pela variação da entrada.</li></ol></div>
+<button class="primary" id="calcReaction">Estimar L, T e K para conferência</button>
+<div id="reactionResult" class="result hint">Estime os parâmetros no gráfico e depois confira os valores.</div>
+<div class="actions"><button id="applyReaction" disabled>Aplicar ganhos PID de Z-N</button></div>
+</div>
+<div class="result"><b>Regras de sintonia — consulta</b>
+<div class="formula">Sensibilidade limite — PID: Kp = 0,6Ku; Ti = Pu/2; Td = Pu/8</div>
+<div class="formula">Sensibilidade limite — PI: Kp = 0,45Ku; Ti = Pu/1,2</div>
+<div class="formula">Curva de reação — PID: Kp = 1,2T/(K·L); Ti = 2L; Td = 0,5L</div>
+<span class="hint">Conversão para os ganhos usados no simulador: Ki = Kp/Ti e Kd = Kp·Td.</span></div>
+<hr style="border:0;border-top:1px solid var(--line);margin:15px 0">
+<b>Comparação: sintonia manual × Ziegler–Nichols</b>
+<p class="hint">Depois de encontrar uma sintonia manual, registre os ganhos. Calcule um dos métodos Z-N e compare os indicadores na mesma planta e nas mesmas condições.</p>
+<div class="actions"><button id="saveManualSet">Registrar sintonia manual atual</button><button id="compareZNSet" disabled>Comparar com Z-N (curva de reação)</button><button id="compareUltimateSet" disabled>Comparar com Z-N (Ku/Pu)</button></div>
+<div id="methodCompareResult" class="result hint">Registre sua sintonia manual e calcule pelo menos um método Z-N para comparar.</div>
+</section>
+  </div>
+  <div id="tabChallenges" class="tabContent" role="tabpanel" aria-labelledby="mainTabChallenges">
+    <section class="panel"><h2>6. Sintonia manual — seja o projetista</h2>
+<p>Escolha uma aplicação e tente cumprir os requisitos ajustando os ganhos. Comece com P, adicione I quando precisar reduzir erro permanente e avalie D para amortecer a resposta.</p>
+<div class="group"><label>Cenário de projeto</label><select id="scenario" style="width:100%"><option value="temperature">Temperatura de tanque — planta lenta</option><option value="motor">Velocidade de motor — planta rápida</option><option value="oscillatory">Posicionamento — planta oscilatória</option><option value="level">Nível de reservatório — processo lento</option></select></div>
+<div id="scenarioDescription" class="result hint">Controle de temperatura: busque uma resposta sem sobressinal excessivo e com erro permanente pequeno.</div>
+<div class="two"><div class="mini"><h3>Requisitos do projeto</h3><div class="group row"><label>Tempo de subida máximo Tr (s)</label><input id="targetTr" type="number" value="8" min=".1" max="60" step=".5"></div><div class="group row"><label>Sobressinal máximo Mp (%)</label><input id="targetMp" type="number" value="10" min="0" max="100" step="1"></div><div class="group row"><label>Ts máximo (s)</label><input id="targetTs" type="number" value="12" min=".1" max="60" step=".5"></div><div class="group row"><label>|Ess| máximo</label><input id="targetEss" type="number" value=".02" min=".001" max="2" step=".005"></div></div>
+<div class="mini"><h3>Verificação</h3><p class="hint">Execute a simulação após cada ajuste. Quando considerar que encontrou uma solução, verifique se atende simultaneamente às três metas.</p><div class="actions"><button class="primary" id="checkChallenge">Verificar meus ganhos</button><button id="newChallenge">Novo desafio</button></div><div id="challengeResult" class="result hint">Aguardando a primeira tentativa.</div></div></div>
+</section>
+    <section class="panel"><h2>7. Perturbações e limitações industriais</h2>
+<p>Ative condições não ideais para observar como o controlador se comporta em uma aplicação mais próxima da indústria.</p>
+<div class="two">
+<div class="mini"><h3>Perturbação de carga</h3><div class="group"><label>Tipo</label><select id="disturbance" style="width:100%"><option value="none">Nenhuma</option><option value="step">Degrau (mantido)</option><option value="pulse">Pulso temporário</option><option value="ramp">Rampa</option></select></div><div class="controlrow"><label>Instante (s)</label><input id="disturbanceTime" type="number" value="5" min="0" max="60" step=".5"><label>Intensidade</label><input id="disturbanceAmp" type="number" value="-.25" min="-3" max="3" step=".05"></div><p class="hint">A perturbação é somada à entrada da planta. Valores negativos simulam, por exemplo, uma carga que retira energia do processo.</p></div>
+<div class="mini"><h3>Limitações do atuador e sensor</h3><div class="group"><label><input id="useSaturation" type="checkbox"> Saturação do atuador (±2 unidades)</label></div><div class="group"><label><input id="useAntiWindup" type="checkbox" checked> Anti-windup integral</label></div><p class="hint">A saturação começa desativada para permitir testar referências maiores, como 10. Quando ativada, limita o sinal de controle entre −2 e +2; se o processo precisar de uma entrada maior, a saída não alcançará a referência. Para ensaios ideais, mantenha-a desativada.</p><div class="group"><label><input id="useNoise" type="checkbox"> Ruído na medição</label><div class="controlrow"><label>Amplitude</label><input id="noiseAmp" type="number" value=".02" min="0" max=".5" step=".01"></div></div><div class="group"><label><input id="useRateLimit" type="checkbox"> Limitar velocidade do atuador</label><div class="controlrow"><label>Variação máx./s</label><input id="rateLimit" type="number" value=".5" min=".05" max="10" step=".05"></div></div><div class="group"><label><input id="useDelay" type="checkbox"> Atraso de transporte</label><div class="controlrow"><label>Atraso (s)</label><input id="transportDelay" type="number" value=".5" min=".02" max="5" step=".05"></div></div></div>
+</div><div class="actions"><button class="primary" id="runIndustrial">Executar com condições industriais</button><button id="resetIndustrial">Restaurar condições ideais</button></div><div id="industrialFeedback" class="result hint">Dica: ative a saturação, aumente Ki e observe se a ação integral continua acumulando enquanto o atuador está no limite.</div>
+</section>
+    <section class="panel"><h2>Como interpretar os indicadores</h2>
+      <p><b>Tr:</b> tempo para a saída subir de 10% a 90% da referência.</p>
+      <p><b>Td:</b> tempo até a primeira chegada a 50% da referência.</p>
+      <p><b>Tp e Mp:</b> instante e magnitude do maior pico acima da referência.</p>
+      <p><b>Ts:</b> tempo a partir do qual a saída permanece na faixa de ±2% da referência.</p>
+      <p><b>Ess:</b> diferença entre referência e saída no final da simulação.</p>
+      <p class="hint">Os valores numéricos permanecem na aba Sintonia manual; as linhas tracejadas correspondentes são desenhadas diretamente no gráfico.</p>
+    </section>
+  </div>
+</div>
+<section class="panel" id="experimentLogPanel">
+  <div class="row"><h2>Registro de experimentos</h2><span class="pill" id="experimentCount">0 registros</span></div>
+  <p class="hint">Conclua uma simulação em malha fechada e registre ganhos, indicadores e todos os pontos da curva (tempo, SP e VP). Exporte a tabela-resumo ou os dados das curvas para plotagem externa.</p>
+  <div class="actions">
+    <button class="primary" id="saveExperiment">＋ Registrar simulação atual</button>
+    <label for="sampleInterval" style="margin-left:8px">Intervalo de amostragem:</label><select id="sampleInterval"><option value="0.01">0,01 s</option><option value="0.02" selected>0,02 s</option><option value="0.05">0,05 s</option><option value="0.1">0,10 s</option></select> <button id="exportExperiments">Exportar tabela (CSV)</button><button id="exportCurves">Exportar curvas SP/VP (CSV)</button>
+    <button id="clearExperiments">Limpar registros</button>
+  </div>
+  <p class="hint" id="experimentMessage" aria-live="polite">Nenhum experimento registrado nesta sessão.</p>
+  <div class="tableWrap">
+    <table>
+      <thead><tr><th># / Planta</th><th>Kp</th><th>Ki</th><th>Kd</th><th>Tr (s)</th><th>Td (s)</th><th>Tp (s)</th><th>Mp (%)</th><th>Ts (s)</th><th>Ess</th><th></th></tr></thead>
+      <tbody id="experimentRows"><tr><td colspan="11" class="emptyRow">Nenhum registro. Execute uma simulação e clique em “Registrar simulação atual”.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+</div></main>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id),cv=$('plot'),ctx=cv.getContext('2d');
+const plants={
+p0:{desc:'Planta de referência: processo RC de primeira ordem com atraso aproximado por Padé. Use-a como base para comparar as demais.',eq:'G(s) = [1/(2,8s + 1)] · [(2 − 1,2s)/(2 + 1,2s)]',kind:'pade',K:1,tau:2.8,td:1.2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=1; τ=2,8 s; τd=1,2 s.'},
+p1:{desc:'Processo mais rápido: menor constante de tempo e menor atraso. Em geral, permite uma resposta mais rápida, mas observe se ganhos elevados provocam oscilações.',eq:'G(s) = [1/(1,5s + 1)] · [(2 − 0,4s)/(2 + 0,4s)]',kind:'pade',K:1,tau:1.5,td:0.4,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=1; τ=1,5 s; τd=0,4 s.'},
+p2:{desc:'Processo mais lento: maior constante de tempo. Observe o aumento do tempo de resposta e evite avaliar a sintonia antes de a simulação terminar.',eq:'G(s) = [1/(5s + 1)] · [(2 − 1s)/(2 + 1s)]',kind:'pade',K:1,tau:5,td:1,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=1; τ=5 s; τd=1 s.'},
+p3:{desc:'Processo de maior ganho: a mesma ação de controle produz uma variação maior na saída. Experimente reduzir os ganhos do controlador em relação à Planta 1.',eq:'G(s) = [2/(2,8s + 1)] · [(2 − 1,2s)/(2 + 1,2s)]',kind:'pade',K:2,tau:2.8,td:1.2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=2; τ=2,8 s; τd=1,2 s.'},
+p4:{desc:'Processo de menor ganho: a saída reage menos à mesma ação de controle. Observe como isso afeta a velocidade e o erro durante a sintonia.',eq:'G(s) = [0,5/(2,8s + 1)] · [(2 − 1,2s)/(2 + 1,2s)]',kind:'pade',K:0.5,tau:2.8,td:1.2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=0,5; τ=2,8 s; τd=1,2 s.'},
+p5:{desc:'Processo com maior atraso: a saída demora mais para refletir as alterações na entrada. Faça ajustes mais conservadores e observe a tendência à oscilação.',eq:'G(s) = [1/(2,8s + 1)] · [(2 − 2s)/(2 + 2s)]',kind:'pade',K:1,tau:2.8,td:2,model:'H(s)=K/(τs+1); Cd(s)=(2−τd·s)/(2+τd·s), K=1; τ=2,8 s; τd=2 s.'}
+};
+let sim=null,visible=0,raf=0,playing=false,lastStamp=0,dt=.002,znPID=null,znPI=null,znReaction=null,openLoop=false;
+function pnow(){return Object.assign({kp:+$('kp').value,ki:+$('ki').value,kd:+$('kd').value,ref:Math.max(.01,+$('ref').value),T:Math.max(2,+$('duration').value),disturbance:$('disturbance').value,disturbanceTime:+$('disturbanceTime').value,disturbanceAmp:+$('disturbanceAmp').value,useSaturation:$('useSaturation').checked,useAntiWindup:$('useAntiWindup').checked,useNoise:$('useNoise').checked,noiseAmp:+$('noiseAmp').value,useRateLimit:$('useRateLimit').checked,rateLimit:Math.max(.01,+$('rateLimit').value),useDelay:$('useDelay').checked,transportDelay:Math.max(0,+$('transportDelay').value)},plants[$('plant').value])}
+function labels(){['kp','ki','kd'].forEach(k=>$(k+'v').textContent=(+$(k).value).toFixed(2))}
+function plantOutput(st,p){if(p.kind==='pade'){return 2*p.K*st[0]-p.td*p.K*st[1]}return st[0]}
+function plantF(st,u,p){
+ if(p.kind==='pade'){let a2=p.td*p.tau,a1=p.td+2*p.tau;return [st[1],(-2*st[0]-a1*st[1]+u)/a2]}
+ if(p.kind==='first')return [(p.K*u-st[0])/p.tau];
+ if(p.kind==='second')return [st[1],-p.wn*p.wn*st[0]-2*p.zeta*p.wn*st[1]+p.wn*p.wn*u];
+ if(p.kind==='integrator')return [st[1],(-st[1]+p.K*u)/p.tau];
+}
+function runModel(p,override){
+ let st=p.kind==='first'?[0]:[0,0],I=0,y=0,prevY=0,dFilt=0,alpha=dt/(.03+dt),arr=[],max=-Infinity,maxT=0,lastU=0;
+ const kp=override?override.kp:p.kp,ki=override?override.ki:p.ki,kd=override?override.kd:p.kd;
+ const N=Math.min(40001,Math.floor(p.T/dt)+1),delayN=p.useDelay?Math.max(0,Math.round(p.transportDelay/dt)):0,queue=Array(delayN+1).fill(0);
+ for(let i=0;i<N;i++){
+  let t=i*dt;y=plantOutput(st,p);let measured=y;
+  if(p.useNoise)measured+=p.noiseAmp*(Math.sin(37*t)+.55*Math.sin(83*t+.7)+.3*Math.sin(131*t+1.4));
+  let e=p.ref-measured,rawD=-(measured-prevY)/dt;dFilt+=alpha*(rawD-dFilt);prevY=measured;
+  let rawU=kp*e+ki*I+kd*dFilt,u=rawU;
+  if(p.useSaturation)u=Math.max(-2,Math.min(2,u));
+  if(p.useRateLimit){let du=p.rateLimit*dt;u=Math.max(lastU-du,Math.min(lastU+du,u));}
+  lastU=u;
+  let delayedU=u;if(delayN>0){queue.push(u);delayedU=queue.shift();}
+  let disturbance=0,td=t-p.disturbanceTime;
+  if(p.disturbance==='step'&&td>=0)disturbance=p.disturbanceAmp;
+  if(p.disturbance==='pulse'&&td>=0&&td<1)disturbance=p.disturbanceAmp;
+  if(p.disturbance==='ramp'&&td>=0)disturbance=p.disturbanceAmp*Math.min(1,td/Math.max(.1,p.T-p.disturbanceTime));
+  let plantU=delayedU+disturbance;
+  const f=x=>plantF(x,plantU,p);
+  let k1=f(st),k2=f(st.map((v,j)=>v+dt*k1[j]/2)),k3=f(st.map((v,j)=>v+dt*k2[j]/2)),k4=f(st.map((v,j)=>v+dt*k3[j]));
+  st=st.map((v,j)=>v+dt*(k1[j]+2*k2[j]+2*k3[j]+k4[j])/6);
+  // Anti-windup por integração condicional: não integra se a saturação pioraria o erro.
+  let saturated=p.useSaturation&&Math.abs(rawU-u)>1e-9;
+  if(!saturated||!p.useAntiWindup||(rawU>u&&e<0)||(rawU<u&&e>0))I+=e*dt;
+  y=plantOutput(st,p);if(!Number.isFinite(y)||Math.abs(y)>1e7)break;
+  arr.push({t,y,u:plantU});if(y>max){max=y;maxT=t}
+ }
+ return {arr,p,max,maxT,mode:'closed',gains:{kp,ki,kd}};
+}
+function runOpenLoop(p){
+ // Ensaio de reação: degrau unitário aplicado diretamente à planta, sem PID.
+ const horizon=Math.min(80,Math.max(20,p.T*2));p.T=horizon;
+ let st=p.kind==='first'?[0]:[0,0],arr=[];const N=Math.min(40001,Math.floor(horizon/dt)+1);
+ for(let i=0;i<N;i++){
+  const t=i*dt,u=1,f=x=>plantF(x,u,p),k1=f(st),k2=f(st.map((v,j)=>v+dt*k1[j]/2)),k3=f(st.map((v,j)=>v+dt*k2[j]/2)),k4=f(st.map((v,j)=>v+dt*k3[j]));
+  st=st.map((v,j)=>v+dt*(k1[j]+2*k2[j]+2*k3[j]+k4[j])/6);
+  const y=plantOutput(st,p);if(!Number.isFinite(y)||Math.abs(y)>1e7)break;arr.push({t,y});
+ }
+ const reaction=reactionEstimate(Object.assign({},p,{T:horizon}));
+ return {arr,p,mode:'open',reaction,max:Math.max(...arr.map(v=>v.y)),maxT:arr.length?arr[arr.length-1].t:0};
+}
+function calcMetrics(a,p){
+ if(!a.length)return null;
+ const cross=f=>{for(let i=0;i<a.length;i++)if(a[i].y>=f*p.ref)return a[i].t;return null};
+ let t10=cross(.1),t50=cross(.5),t90=cross(.9),max=-Infinity,maxT=0;
+ for(const v of a)if(v.y>max){max=v.y;maxT=v.t}
+ let last=-1,tol=.02*Math.abs(p.ref);
+ for(let i=0;i<a.length;i++)if(Math.abs(a[i].y-p.ref)>tol)last=i;
+ const final=a[a.length-1].y,settled=last<a.length-1;
+ return {tr:t10!==null&&t90!==null?t90-t10:null,t10,t50,t90,td:t50,tp:maxT,mp:Math.max(0,(max-p.ref)/Math.abs(p.ref)*100),ts:settled?(last<0?0:a[last+1].t):null,ess:p.ref-final,max,final,settled};
+}
+function fmt(v){return v===null||v===undefined?'—':v.toFixed(3)+' s'}
+function updateMetrics(){
+ if(sim.mode==='open'){ $('openLoopReadout').textContent=sim.reaction?'Curva de reação pronta. Use a tangente tracejada para estimar L (interseção com o eixo do tempo) e T (distância horizontal até a interseção com o valor final). Para conferir, use “Estimar L e T” no módulo Ziegler–Nichols.':'Curva de reação exibida; não foi possível estimar uma tangente válida para esta planta.'; $('clock').textContent='t = '+(visible?sim.arr[Math.min(visible,sim.arr.length)-1].t:0).toFixed(2).replace('.',',')+' s';$('bar').style.width=(100*visible/Math.max(1,sim.arr.length))+'%';return;}
+ const a=sim.arr.slice(0,visible),m=calcMetrics(a,sim.p),complete=visible>=sim.arr.length;
+ if(!m)return;
+ $('tr').textContent=fmt(m.tr);$('tdelay').textContent=fmt(m.td);$('tp').textContent=fmt(m.tp);$('mp').textContent=m.mp.toFixed(2)+'%';
+ $('ts').textContent=complete?(m.ts===null?'Não atingido':fmt(m.ts)):(m.ts===null?'Calculando…':fmt(m.ts)+'*');
+ $('ess').textContent=m.ess.toFixed(4);$('metricNote').textContent=complete?'Resultados finais do ensaio. Ts exige permanência na faixa de ±2% até o fim da janela.':'Indicadores calculados com os pontos já desenhados; *Ts é provisório.';
+ $('clock').textContent='t = '+(a.length?a[a.length-1].t:0).toFixed(2).replace('.',',')+' s';$('bar').style.width=(100*visible/Math.max(1,sim.arr.length))+'%';
+}
+function draw(){
+ const w=cv.width,h=cv.height,L=62,R=18,T=16,B=40,p=sim.p,a=sim.arr.slice(0,visible);
+ const all=sim.arr.map(v=>v.y).concat(sim.comparisons?sim.comparisons.flatMap(c=>c.arr.map(v=>v.y)):[]);let ymin=Math.min(0,...all),ymax=Math.max(p.ref*1.15,...all);if(ymax-ymin<.1)ymax=ymin+1;
+ const X=t=>L+t/p.T*(w-L-R),Y=y=>h-B-(y-ymin)/(ymax-ymin)*(h-T-B);
+ ctx.clearRect(0,0,w,h);ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.strokeStyle='#e5eaf1';ctx.lineWidth=1;ctx.fillStyle='#64748b';ctx.font='12px system-ui';
+ for(let i=0;i<=5;i++){let yy=T+i*(h-T-B)/5,v=ymax-i*(ymax-ymin)/5;ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();ctx.fillText(v.toFixed(2),6,yy+4);let xx=L+i*(w-L-R)/5;ctx.beginPath();ctx.moveTo(xx,T);ctx.lineTo(xx,h-B);ctx.stroke();ctx.fillText((p.T*i/5).toFixed(1),xx-10,h-12)}
+ // Referência e indicadores temporais pertencem apenas à malha fechada.
+ if(sim.mode==='closed'){ctx.strokeStyle='#2563eb';ctx.lineWidth=2;ctx.setLineDash([7,5]);ctx.beginPath();ctx.moveTo(X(0),Y(p.ref));ctx.lineTo(X(p.T),Y(p.ref));ctx.stroke();ctx.setLineDash([]);}
+ const m=sim.mode==='closed'&&a.length?calcMetrics(a,p):null;
+ if(m){
+   const dash=(x1,y1,x2,y2,color=[100,116,139],width=1.35)=>{ctx.strokeStyle=`rgb(${color.join(',')})`;ctx.lineWidth=width;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.setLineDash([])};
+   const tag=(txt,x,y,color='#334155',align='left')=>{ctx.font='bold 12px system-ui';ctx.textAlign=align;const tw=ctx.measureText(txt).width;ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(x-(align==='right'?tw:0)-3,y-12,tw+6,16);ctx.fillStyle=color;ctx.fillText(txt,x,y)};
+   // Linhas horizontais da banda de acomodação.
+   dash(L,Y(p.ref*.98),w-R,Y(p.ref*.98),[148,163,184],1);dash(L,Y(p.ref*1.02),w-R,Y(p.ref*1.02),[148,163,184],1);
+   tag('+2%',L+5,Y(p.ref*1.02)-3,'#64748b');tag('−2%',L+5,Y(p.ref*.98)-3,'#64748b');
+   if(m.t10!==null&&m.t90!==null){dash(X(m.t10),T,X(m.t10),h-B,[14,165,233]);dash(X(m.t90),T,X(m.t90),h-B,[14,165,233]);tag('Tr: 10–90%',(X(m.t10)+X(m.t90))/2,T+15,'#0284c7','center')}
+   if(m.td!==null){dash(X(m.td),Y(p.ref*.5),X(m.td),h-B,[217,119,6]);tag('Td',(X(m.td)+7),h-B-8,'#b45309')}
+   if(m.tp!==null&&m.max>p.ref){dash(X(m.tp),Y(p.ref),X(m.tp),Y(m.max),[220,38,38],1.7);dash(L,Y(m.max),X(m.tp),Y(m.max),[220,38,38]);tag('Mp: '+m.mp.toFixed(1)+'%',Math.min(w-R-5,X(m.tp)+8),Y(m.max)-5,'#dc2626')}
+   if(m.ts!==null){dash(X(m.ts),T,X(m.ts),h-B,[5,150,105],1.7);tag('Ts',Math.min(w-R-5,X(m.ts)+5),T+30,'#059669')}
+   if(m.tp!==null){dash(X(m.tp),Y(m.max),X(m.tp),h-B,[220,38,38],1);tag('Tp',Math.min(w-R-5,X(m.tp)+5),h-B-24,'#dc2626')}
+   if(a.length>1){let xe=X(a[a.length-1].t);dash(xe,Y(m.final),xe,Y(p.ref),[124,58,237],1.8);tag('Ess',Math.max(L+5,xe-5),Math.min(h-B-7,Math.max(T+14,(Y(m.final)+Y(p.ref))/2)),'#7c3aed','right')}
+ }
+ if(sim.mode==='open'&&sim.reaction){
+  const r=sim.reaction,tx0=Math.max(0,r.L),tx1=Math.min(p.T,r.L+r.T),ty0=0,ty1=r.slope*(tx1-r.L);
+  ctx.strokeStyle='#d97706';ctx.lineWidth=2;ctx.setLineDash([8,5]);ctx.beginPath();ctx.moveTo(X(tx0),Y(ty0));ctx.lineTo(X(tx1),Y(ty1));ctx.stroke();ctx.setLineDash([]);
+  const vline=(x,label,color)=>{ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(X(x),T);ctx.lineTo(X(x),h-B);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=color;ctx.font='bold 12px system-ui';ctx.fillText(label,X(x)+4,T+14)};
+  vline(r.L,'L estimado','#b45309');vline(Math.min(p.T,r.L+r.T),'L + T','#b45309');
+  ctx.fillStyle='#b45309';ctx.font='bold 12px system-ui';ctx.fillText('Tangente',Math.min(w-R-70,X((tx0+tx1)/2)+5),Y((ty0+ty1)/2)-8);
+ }
+ if(a.length){ctx.strokeStyle='#059669';ctx.lineWidth=2.4;ctx.beginPath();a.forEach((v,i)=>i?ctx.lineTo(X(v.t),Y(v.y)):ctx.moveTo(X(v.t),Y(v.y)));ctx.stroke()}
+ if(sim.comparisons){const colors=['#d97706','#7c3aed','#0891b2'];sim.comparisons.forEach((c,j)=>{ctx.strokeStyle=colors[j];ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();c.arr.slice(0,visible).forEach((v,i)=>i?ctx.lineTo(X(v.t),Y(v.y)):ctx.moveTo(X(v.t),Y(v.y)));ctx.stroke();ctx.setLineDash([])})}
+ ctx.textAlign='left';ctx.fillStyle='#334155';ctx.fillText('Tempo (s)',w/2-25,h-2);
+}
+function animate(ts){if(!playing)return;if(!lastStamp)lastStamp=ts;let elapsed=(ts-lastStamp)/1000;lastStamp=ts;visible=Math.min(sim.arr.length,visible+Math.max(1,Math.floor(elapsed*3/dt)));draw();updateMetrics();if(visible<sim.arr.length)raf=requestAnimationFrame(animate);else{playing=false;$('status').textContent='Ensaio concluído. Indicadores finais disponíveis.'}}
+function stop(){playing=false;cancelAnimationFrame(raf);lastStamp=0}
+function updateModeUI(){
+ $('openLoopToggle').textContent=openLoop?'↩ Voltar à malha fechada':'▶ Ensaio em malha aberta';
+ $('modeHint').textContent=openLoop?'Modo atual: malha aberta — PID desconectado; degrau unitário aplicado diretamente à planta.':'Modo atual: malha fechada — o PID atua sobre o erro.';
+ $('chartTitle').textContent=openLoop?'Resposta da planta em malha aberta':'Resposta ao degrau em malha fechada';
+ $('chartLegend').innerHTML=openLoop?'<span><i class="dot" style="background:#059669"></i>Saída da planta y(t)</span><span><i class="dot" style="background:#d97706"></i>Tangente estimada</span><span class="hint">Entrada aplicada: degrau unitário u(t)=1.</span>':'<span><i class="dot" style="background:#2563eb"></i>Referência</span><span><i class="dot" style="background:#059669"></i>Saída y(t)</span><span class="hint">Tracejados: Tr, Td, Tp, Mp, Ts e Ess; faixa cinza: ±2%.</span>';
+ $('openLoopPanel').style.display=openLoop?'block':'none';$('metricsPanel').style.display=openLoop?'none':'block';
+}
+function simulate(){stop();labels();let p=pnow();sim=openLoop?runOpenLoop(p):runModel(p);visible=0;updateModeUI();draw();updateMetrics();$('status').textContent=sim.arr.length?(openLoop?'Ensaio em malha aberta calculado. Clique em Simular para acompanhar a curva de reação.':'Modelo calculado. Clique em Simular para acompanhar o gráfico.'):'A resposta divergiu numericamente. Reduza os ganhos ou aumente o tempo de filtro derivativo.';$('modelText').textContent=p.model+(openLoop?' Ensaio: degrau unitário diretamente na planta, sem controlador.':' Controlador: C(s)=Kd·s+Kp+Ki/s.')}
+function start(){if(!sim)simulate();stop();visible=0;playing=true;$('status').textContent=openLoop?'Ensaio em malha aberta em execução.':'Simulação em malha fechada em execução.';raf=requestAnimationFrame(animate)}
+function updatePlant(){let p=plants[$('plant').value];$('plantDescription').textContent=p.desc;$('plantEquation').textContent=p.eq;openLoop=false;simulate()}
+function setGains(kp,ki,kd){openLoop=false;$('kp').value=Math.max(0,Math.min(30,kp));$('ki').value=Math.max(0,Math.min(10,ki));$('kd').value=Math.max(0,Math.min(10,kd));labels();simulate()}
+function complexMul(a,b){return [a[0]*b[0]-a[1]*b[1],a[0]*b[1]+a[1]*b[0]]}
+function complexDiv(a,b){let d=b[0]*b[0]+b[1]*b[1];return [(a[0]*b[0]+a[1]*b[1])/d,(a[1]*b[0]-a[0]*b[1])/d]}
+function plantFreq(w,p){
+ const s=[0,w];
+ if(p.kind==='first')return complexDiv([p.K,0],[1,p.tau*w]);
+ if(p.kind==='pade'){
+  let h=complexDiv([p.K,0],[1,p.tau*w]),d=complexDiv([2,-p.td*w],[2,p.td*w]);return complexMul(h,d)
+ }
+ if(p.kind==='second'){
+  let den=[p.wn*p.wn-w*w,2*p.zeta*p.wn*w];return complexDiv([p.wn*p.wn,0],den)
+ }
+ // K/[s(tau*s+1)]
+ let den=complexMul([0,w],[1,p.tau*w]);return complexDiv([p.K,0],den)
+}
+function phaseCross(p){
+ let prev=null,prevW=0,prevPhase=0;
+ for(let i=0;i<=12000;i++){
+  let w=10**(-3+i*6/12000),g=plantFreq(w,p),phase=Math.atan2(g[1],g[0]);
+  if(prev!==null){while(phase-prevPhase>Math.PI)phase-=2*Math.PI;while(phase-prevPhase< -Math.PI)phase+=2*Math.PI;
+   // find crossing of -pi - 2pi*n in unwrapped phase
+   let lo=Math.min(prevPhase,phase),hi=Math.max(prevPhase,phase);
+   let k0=Math.ceil((lo+Math.PI)/(2*Math.PI)),k1=Math.floor((hi+Math.PI)/(2*Math.PI));
+   if(k0<=k1&&phase!==prevPhase){let target=-Math.PI+2*Math.PI*k0;let f=(target-prevPhase)/(phase-prevPhase),lw=Math.log(prevW)+f*(Math.log(w)-Math.log(prevW)),wc=Math.exp(lw),gc=plantFreq(wc,p),mag=Math.hypot(gc[0],gc[1]);if(mag>1e-10)return {Ku:1/mag,Pu:2*Math.PI/wc,wc}}
+  }
+  prev=w;prevW=w;prevPhase=phase;
+ }
+ return null
+}
+function reactionEstimate(p){
+ // Open-loop step response, estimate inflection tangent using sampled slope.
+ let st=p.kind==='first'?[0]:[0,0],arr=[],h=.002,horizon=Math.min(80,Math.max(20,p.T*2));
+ for(let i=0;i<horizon/h;i++){let t=i*h,y=plantOutput(st,p);arr.push({t,y});let u=1,f=x=>plantF(x,u,p),k1=f(st),k2=f(st.map((v,j)=>v+h*k1[j]/2)),k3=f(st.map((v,j)=>v+h*k2[j]/2)),k4=f(st.map((v,j)=>v+h*k3[j]));st=st.map((v,j)=>v+h*(k1[j]+2*k2[j]+2*k3[j]+k4[j])/6)}
+ let slopes=[];for(let i=2;i<arr.length-2;i++)slopes.push({i,s:(arr[i+1].y-arr[i-1].y)/(2*h)});
+ let im=0;for(let i=1;i<slopes.length;i++)if(slopes[i].s>slopes[im].s)im=i;
+ let idx=slopes[im].i,slope=slopes[im].s,y=arr[idx].y,t=arr[idx].t,yf=arr[arr.length-1].y;
+ if(!Number.isFinite(slope)||slope<=0||!Number.isFinite(yf)||yf<=0)return null;
+ let L=t-y/slope,T=yf/slope;
+ if(L<=0||T<=0)return null;
+ return {L,T,yf,slope}
+}
+
+function setMainTab(which){
+ const ids={manual:'tabManual',zn:'tabZN',challenges:'tabChallenges'};
+ Object.keys(ids).forEach(k=>{
+  const active=k===which;
+  $(ids[k]).classList.toggle('active',active);
+ });
+ const buttons={manual:'mainTabManual',zn:'mainTabZN',challenges:'mainTabChallenges'};
+ Object.keys(buttons).forEach(k=>{
+  $(buttons[k]).classList.toggle('active',k===which);
+  $(buttons[k]).setAttribute('aria-selected',k===which?'true':'false');
+ });
+}
+$('mainTabManual').onclick=()=>setMainTab('manual');
+$('mainTabZN').onclick=()=>setMainTab('zn');
+$('mainTabChallenges').onclick=()=>setMainTab('challenges');
+
+function setZNTab(which){let ult=which==='ult';$('znUltimate').style.display=ult?'block':'none';$('znReaction').style.display=ult?'none':'block';$('znUltimateTab').classList.toggle('active',ult);$('znReactionTab').classList.toggle('active',!ult)}
+$('znUltimateTab').onclick=()=>setZNTab('ult');$('znReactionTab').onclick=()=>setZNTab('reaction');
+$('calcUltimate').onclick=()=>{
+ let p=pnow(),v=phaseCross(p);znPID=znPI=null;
+ if(!v){$('ultimateResult').innerHTML='<span class="warn">Não foi encontrado cruzamento de fase em −180° na faixa analisada. Este método não fornece Ku e Pu finitos para esta planta.</span>';$('applyZN').disabled=true;$('applyZNPI').disabled=true;return}
+ let kp=.6*v.Ku,Ti=v.Pu/2,Td=v.Pu/8;znPID={kp,ki:kp/Ti,kd:kp*Td};let kpi=.45*v.Ku,Tii=v.Pu/1.2;znPI={kp:kpi,ki:kpi/Tii,kd:0};
+ $('ultimateResult').innerHTML='<b>Etapa 1 — parâmetros críticos</b><br>Ku = '+v.Ku.toFixed(4)+'; Pu = '+v.Pu.toFixed(4)+' s; ωu = '+v.wc.toFixed(4)+' rad/s<br><br><b>Etapa 2 — PID clássico</b><br>Kp = 0,6·Ku = '+znPID.kp.toFixed(4)+'<br>Ti = Pu/2 = '+Ti.toFixed(4)+' s; Td = Pu/8 = '+Td.toFixed(4)+' s<br>Ki = Kp/Ti = '+znPID.ki.toFixed(4);
+ $('applyZN').disabled=false;$('applyZNPI').disabled=false;
+};
+$('applyZN').onclick=()=>{if(znPID)setGains(znPID.kp,znPID.ki,znPID.kd)};
+$('applyZNPI').onclick=()=>{if(znPI)setGains(znPI.kp,znPI.ki,0)};
+$('calcReaction').onclick=()=>{
+ let v=reactionEstimate(pnow());znReaction=null;
+ if(!v){$('reactionResult').innerHTML='<span class="warn">Não foi possível estimar uma curva de reação com atraso positivo e inclinação válida para esta planta.</span>';$('applyReaction').disabled=true;return}
+ let kp=1.2*v.T/(v.yf*v.L),Ti=2*v.L,Td=.5*v.L;znReaction={kp,ki:kp/Ti,kd:kp*Td};
+ $('reactionResult').innerHTML='<b>Etapa 1 — parâmetros da curva</b><br>L = '+v.L.toFixed(4)+' s; T = '+v.T.toFixed(4)+' s; K = '+v.yf.toFixed(4)+'<br><br><b>Etapa 2 — PID clássico</b><br>Kp = 1,2T/(K·L) = '+znReaction.kp.toFixed(4)+'<br>Ti = 2L = '+Ti.toFixed(4)+' s; Td = 0,5L = '+Td.toFixed(4)+' s<br>Ki = Kp/Ti = '+znReaction.ki.toFixed(4)+'; Kd = Kp·Td = '+znReaction.kd.toFixed(4);
+ $('applyReaction').disabled=false;
+};
+$('applyReaction').onclick=()=>{if(znReaction)setGains(znReaction.kp,znReaction.ki,znReaction.kd)};
+$('checkChallenge').onclick=()=>{
+ let p=pnow(),m=calcMetrics(sim.arr,p);if(!m){$('challengeResult').textContent='Execute uma simulação primeiro.';return}
+ let tr=+ $('targetTr').value,a=+ $('targetMp').value,b=+ $('targetTs').value,c=+ $('targetEss').value;
+ let pass=m.tr!==null&&m.tr<=tr&&m.mp<=a&&m.ts!==null&&m.ts<=b&&Math.abs(m.ess)<=c;
+ $('challengeResult').innerHTML=(pass?'<b class="good">Desafio concluído!</b>':'<b class="warn">Ainda não atingiu todas as metas.</b>')+'<br>Tr: '+(m.tr===null?'não atingido':m.tr.toFixed(3)+' s')+' (meta ≤ '+tr+' s)<br>Sobressinal: '+m.mp.toFixed(2)+'% (meta ≤ '+a+'%)<br>Ts: '+(m.ts===null?'não atingido':m.ts.toFixed(3)+' s')+' (meta ≤ '+b+' s)<br>|Ess|: '+Math.abs(m.ess).toFixed(4)+' (meta ≤ '+c+')';
+};
+$('newChallenge').onclick=()=>{
+ const list=[{tr:8,mp:8,ts:12,ess:.02},{tr:6,mp:15,ts:10,ess:.03},{tr:10,mp:5,ts:14,ess:.01},{tr:5,mp:12,ts:9,ess:.015}];let q=list[Math.floor(Math.random()*list.length)];
+ $('targetTr').value=q.tr;$('targetMp').value=q.mp;$('targetTs').value=q.ts;$('targetEss').value=q.ess;$('challengeResult').textContent='Novo conjunto de metas definido. Ajuste os ganhos e teste novamente.';
+};
+$('run').onclick=start;$('openLoopToggle').onclick=()=>{openLoop=!openLoop;simulate();};$('pause').onclick=()=>{stop();$('status').textContent='Simulação pausada. Clique em Simular para reiniciar a animação.'};$('reset').onclick=simulate;
+$('plant').onchange=updatePlant;
+['kp','ki','kd'].forEach(id=>$(id).addEventListener('input',()=>{labels();simulate()}));
+['ref','duration'].forEach(id=>$(id).addEventListener('change',simulate));
+document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{let v={p:[2,0,0],i:[0,1,0],d:[0,0,.5],pi:[2,1,0],pd:[2,0,.5],pid:[2,1,.5]}[b.dataset.preset];setGains(...v)});
+
+// Atividades de previsão e comparação de controladores.
+$('checkPrediction').onclick=()=>{let a=$('predictionAnswer').value,fb=$('predictionFeedback');if(!a){fb.textContent='Escolha uma alternativa antes de conferir.';return}fb.innerHTML=a==='a'?'<b class="good">Correto!</b> A ação integral acumula o erro e tende a eliminá-lo em regime permanente, mas pode aumentar o sobressinal e as oscilações.':'<b class="warn">Ainda não.</b> A alternativa correta é a primeira: a integral tende a eliminar o erro permanente, mas em excesso pode aumentar sobressinal e oscilações.'};
+$('compareControllers').onclick=()=>{openLoop=false;let p=pnow();let base=Object.assign({},p);let sets=[{kp:p.kp,ki:0,kd:0},{kp:p.kp,ki:Math.max(.1,p.ki||.5),kd:0},{kp:p.kp,ki:Math.max(.1,p.ki||.5),kd:Math.max(.05,p.kd||.25)}];let labels=['P','PI','PID'];let results=sets.map(g=>runModel(base,g));sim=results[0];sim.comparisons=results.slice(1);visible=sim.arr.length;updateModeUI();draw();updateMetrics();$('chartTitle').textContent='Comparação P × PI × PID';$('chartLegend').innerHTML='<span><i class="dot" style="background:#059669"></i>P</span><span><i class="dot" style="background:#d97706"></i>PI</span><span><i class="dot" style="background:#7c3aed"></i>PID</span>';let summary=results.map((r,i)=>{let m=calcMetrics(r.arr,r.p);return labels[i]+': Mp '+m.mp.toFixed(1)+'%; Ts '+(m.ts===null?'não atingido':m.ts.toFixed(2)+' s')+'; Ess '+m.ess.toFixed(3)}).join('<br>');$('status').textContent='Comparação concluída. As três curvas foram calculadas nas mesmas condições.';$('industrialFeedback').innerHTML=summary};
+$('clearComparison').onclick=()=>{if(sim){delete sim.comparisons;simulate()}};
+$('scenario').onchange=()=>{let v=$('scenario').value,config={precision:'Objetivo: priorize erro permanente pequeno. Investigue o efeito da ação integral e evite aumentar Ki excessivamente.',fast:'Objetivo: reduza o tempo de subida e o tempo de acomodação, respeitando o limite de sobressinal.',damped:'Objetivo: minimize o sobressinal e as oscilações, mesmo que a resposta fique um pouco mais lenta.',disturbance:'Objetivo: encontre ganhos que acompanhem a referência e recuperem o valor desejado após uma perturbação.'};$('scenarioDescription').textContent=config[v];};
+$('runIndustrial').onclick=()=>{openLoop=false;simulate();start();$('industrialFeedback').textContent='Ensaio iniciado com as condições industriais selecionadas. Observe o gráfico e compare com as condições ideais.'};
+$('resetIndustrial').onclick=()=>{['useNoise','useRateLimit','useDelay'].forEach(id=>$(id).checked=false);$('useSaturation').checked=false;$('useAntiWindup').checked=true;$('disturbance').value='none';$('disturbanceAmp').value='-.25';simulate();$('industrialFeedback').textContent='Condições restauradas: sem perturbação, ruído, atraso ou limitação de velocidade e sem saturação do atuador.'};
+let manualSnapshot=null;
+$('saveManualSet').onclick=()=>{manualSnapshot={kp:+$('kp').value,ki:+$('ki').value,kd:+$('kd').value,plant:$('plant').value};$('compareZNSet').disabled=!znReaction;$('compareUltimateSet').disabled=!znPID;$('methodCompareResult').textContent='Sintonia manual registrada: Kp='+manualSnapshot.kp.toFixed(3)+', Ki='+manualSnapshot.ki.toFixed(3)+', Kd='+manualSnapshot.kd.toFixed(3)+'. Calcule um método Z-N e compare.'};
+function methodComparison(z,method){if(!manualSnapshot){$('methodCompareResult').textContent='Registre primeiro a sintonia manual.';return}let p=pnow();if(manualSnapshot.plant!==$('plant').value){$('methodCompareResult').textContent='A planta foi alterada desde o registro manual. Registre novamente para garantir comparação justa.';return}let a=runModel(p,manualSnapshot),b=runModel(p,z),ma=calcMetrics(a.arr,p),mb=calcMetrics(b.arr,p);$('methodCompareResult').innerHTML='<b>Mesma planta e mesmas condições</b><br>Manual — Mp '+ma.mp.toFixed(2)+'%; Ts '+(ma.ts===null?'não atingido':ma.ts.toFixed(2)+' s')+'; |Ess| '+Math.abs(ma.ess).toFixed(4)+'<br>'+method+' — Mp '+mb.mp.toFixed(2)+'%; Ts '+(mb.ts===null?'não atingido':mb.ts.toFixed(2)+' s')+'; |Ess| '+Math.abs(mb.ess).toFixed(4)+'<br><span class="hint">Compare os indicadores e também a resposta a perturbações. Menor sobressinal isoladamente não significa necessariamente melhor sintonia.</span>'}
+$('compareZNSet').onclick=()=>{if(znReaction)methodComparison(znReaction,'Z-N curva de reação')};$('compareUltimateSet').onclick=()=>{if(znPID)methodComparison(znPID,'Z-N sensibilidade limite')};
+// Ao calcular Z-N, habilita comparações se a sintonia manual já estiver registrada.
+const oldCalcReaction=$('calcReaction').onclick;$('calcReaction').onclick=()=>{oldCalcReaction();$('compareZNSet').disabled=!znReaction};
+const oldCalcUltimate=$('calcUltimate').onclick;$('calcUltimate').onclick=()=>{oldCalcUltimate();$('compareUltimateSet').disabled=!znPID};
+
+// Registro comparativo de experimentos (mantido no navegador e exportável em CSV).
+let experimentLog=[];
+const plantNames={p0:'Planta 1 — Referência',p1:'Planta 2 — Mais rápida',p2:'Planta 3 — Mais lenta',p3:'Planta 4 — Maior ganho',p4:'Planta 5 — Menor ganho',p5:'Planta 6 — Maior atraso'};
+function metricValue(v,digits=3){return v===null||v===undefined?'—':Number(v).toFixed(digits)}
+function renderExperimentLog(){
+ const body=$('experimentRows');
+ $('experimentCount').textContent=experimentLog.length+' registro'+(experimentLog.length===1?'':'s');
+ if(!experimentLog.length){body.innerHTML='<tr><td colspan="11" class="emptyRow">Nenhum registro. Execute uma simulação e clique em “Registrar simulação atual”.</td></tr>';return}
+ body.innerHTML=experimentLog.map((r,i)=>'<tr><td>'+(i+1)+'. '+r.plant+'</td><td>'+r.kp.toFixed(2)+'</td><td>'+r.ki.toFixed(2)+'</td><td>'+r.kd.toFixed(2)+'</td><td>'+metricValue(r.tr)+'</td><td>'+metricValue(r.td)+'</td><td>'+metricValue(r.tp)+'</td><td>'+metricValue(r.mp,2)+'</td><td>'+metricValue(r.ts)+'</td><td>'+metricValue(r.ess,4)+'</td><td><button data-export-curve="'+i+'" title="Exportar pontos SP e VP">Dados</button> <button data-remove-experiment="'+i+'" title="Remover registro">Remover</button></td></tr>').join('');
+ body.querySelectorAll('[data-remove-experiment]').forEach(b=>b.onclick=()=>{experimentLog.splice(+b.dataset.removeExperiment,1);renderExperimentLog();});
+ body.querySelectorAll('[data-export-curve]').forEach(b=>b.onclick=()=>downloadCurveCSV([experimentLog[+b.dataset.exportCurve]]));
+}
+$('saveExperiment').onclick=()=>{
+ if(!sim||openLoop||sim.mode==='open'){ $('experimentMessage').textContent='O registro exige uma simulação em malha fechada. Desative o ensaio em malha aberta e simule novamente.';return; }
+ if(visible<sim.arr.length){ $('experimentMessage').textContent='Aguarde a conclusão da simulação antes de registrar o resultado.';return; }
+ const m=calcMetrics(sim.arr,sim.p);
+ if(!m){$('experimentMessage').textContent='Não foi possível calcular os indicadores desta simulação.';return;}
+ const row={plant:plantNames[$('plant').value]||$('plant').value,plantId:$('plant').value,kp:+$('kp').value,ki:+$('ki').value,kd:+$('kd').value,ref:+$('ref').value,duration:+$('duration').value,tr:m.tr,td:m.td,tp:m.tp,mp:m.mp,ts:m.ts,ess:m.ess,date:new Date().toLocaleString('pt-BR'),samples:sim.arr.map(v=>({t:v.t,sp:sim.p.ref,vp:v.y}))};
+ experimentLog.push(row);
+function csvCell(v){
+ const value=(typeof v==='number'&&Number.isFinite(v))
+  ? String(v).replace('.',',')
+  : String(v===null||v===undefined?'':v);
+ return '"'+value.replace(/"/g,'""')+'"';
+}
+function downloadTextCSV(filename,rows){
+ const csv='\ufeff'+rows.map(row=>row.map(csvCell).join(';')).join('\r\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function sampledCurve(r,step){
+ const source=r.samples||[];if(!source.length)return [];
+ const out=[source[0]];let next=step;
+ for(let i=1;i<source.length-1;i++){
+  if(source[i].t+1e-9>=next){out.push(source[i]);next+=step;while(source[i].t+1e-9>=next)next+=step;}
+ }
+ if(source.length>1&&out[out.length-1]!==source[source.length-1])out.push(source[source.length-1]);
+ return out;
+}
+function downloadCurveCSV(records){
+ if(!records||!records.length)return;
+ const step=Math.max(.001,+$('sampleInterval').value||.02),curves=records.map(r=>sampledCurve(r,step));
+ // Formato largo com colunas independentes por experimento: facilita criar séries XY sem conectar curvas distintas.
+ const maxLen=Math.max(0,...curves.map(c=>c.length)),header=[];
+ records.forEach((r,i)=>header.push('Tempo_s_Exp'+(i+1),'SP_Exp'+(i+1),'VP_Exp'+(i+1)));
+ const rows=[header];
+ for(let j=0;j<maxLen;j++){
+  const row=[];curves.forEach(c=>{const v=c[j];row.push(v?v.t:'',v?v.sp:'',v?v.vp:'')});rows.push(row);
+ }
+ downloadTextCSV(records.length===1?'curva_'+records[0].plantId+'.csv':'curvas_experimentos_pid.csv',rows);
+ $('experimentMessage').textContent='Exportação concluída: '+records.length+' experimento(s), intervalo de '+step.toFixed(2)+' s; pontos por curva: '+curves.map(c=>c.length).join(', ')+'.';
+}
+$('exportCurves').onclick=()=>{
+ if(!experimentLog.length){$('experimentMessage').textContent='Registre pelo menos um experimento antes de exportar as curvas.';return;}
+ downloadCurveCSV(experimentLog);
+};
+renderExperimentLog();
+ $('experimentMessage').textContent='Experimento registrado. Você pode selecionar outra planta, testar os mesmos ganhos e registrar uma nova resposta.';
+};
+$('clearExperiments').onclick=()=>{if(!experimentLog.length)return;if(confirm('Deseja apagar todos os experimentos registrados nesta tabela?')){experimentLog=[];renderExperimentLog();$('experimentMessage').textContent='Registros apagados.';}};
+$('exportExperiments').onclick=()=>{
+ if(!experimentLog.length){$('experimentMessage').textContent='Registre pelo menos um experimento antes de exportar.';return;}
+ const cols=[['Planta','plant'],['Kp','kp'],['Ki','ki'],['Kd','kd'],['Referencia','ref'],['Duracao_s','duration'],['Tr_s','tr'],['Td_s','td'],['Tp_s','tp'],['Mp_percent','mp'],['Ts_s','ts'],['Ess','ess'],['Data_hora','date']];
+ const esc=v=>'"'+String(v===null||v===undefined?'':v).replace(/"/g,'""')+'"';
+ const csv='\ufeff'+[cols.map(c=>esc(c[0])).join(';'),...experimentLog.map(r=>cols.map(c=>esc(r[c[1]])).join(';'))].join('\r\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='experimentos_controle_pid.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ $('experimentMessage').textContent='Arquivo CSV gerado com '+experimentLog.length+' experimento(s).';
+};
+renderExperimentLog();
+
+labels();updatePlant();
+})();
+</script></body></html>
