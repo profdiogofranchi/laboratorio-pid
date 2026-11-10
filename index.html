@@ -296,7 +296,6 @@ function draw(){
  ctx.textAlign='left';ctx.fillStyle='#334155';ctx.fillText('Tempo (s)',w/2-25,h-2);
 }
 // Leitura interativa do ponto mais próximo da curva principal (desktop e toque).
-let plotHover=null,plotScale=null;
 function updatePlotHover(clientX,clientY){
  if(!sim||!sim.arr||!sim.arr.length)return;
  const rect=cv.getBoundingClientRect(),sx=cv.width/rect.width,sy=cv.height/rect.height;
